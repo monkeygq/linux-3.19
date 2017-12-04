@@ -175,7 +175,7 @@ struct map *map__new(struct machine *machine, u64 start, u64 len,
 
 		if (vdso) {
 			pgoff = 0;
-			dso = vdso__dso_findnew(machine, thread);
+			dso = vdso__dso_findnew(machine, thread); /* find dso from machine->user_dsos by "[vdso]" */
 		} else
 			dso = __dsos__findnew(&machine->user_dsos, filename);
 

@@ -211,7 +211,7 @@ struct machine *machines__find(struct machines *machines, pid_t pid)
 	if (pid == HOST_KERNEL_ID)
 		return &machines->host;
 
-	while (*p != NULL) {
+	while (*p != NULL) { /* find from machines->guests */
 		parent = *p;
 		machine = rb_entry(parent, struct machine, rb_node);
 		if (pid < machine->pid)
@@ -224,7 +224,11 @@ struct machine *machines__find(struct machines *machines, pid_t pid)
 			default_machine = machine;
 	}
 
-	return default_machine;
+	return default_machine; 
+	/* 
+	 * if not found from machines->guests
+	 * return machine(pid = 0), why dont new a guest machine???
+	 */
 }
 
 struct machine *machines__findnew(struct machines *machines, pid_t pid)
@@ -350,6 +354,10 @@ out_err:
 static struct thread *__machine__findnew_thread(struct machine *machine,
 						pid_t pid, pid_t tid,
 						bool create)
+/*
+ * machine_process_comm_event use this function to new thread
+ * machine_process_mmap2_event use this function to find thread
+ */
 {
 	struct rb_node **p = &machine->threads.rb_node;
 	struct rb_node *parent = NULL;
@@ -361,6 +369,9 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 	 * the full rbtree:
 	 */
 	th = machine->last_match;
+	printf("last match ? %d, pid = %d, tid = %d\n", !!th, pid, tid);
+	if(th)
+		printf("last match pid = %d, last match tid = %d\n", th->pid_, th->tid);
 	if (th && th->tid == tid) {
 		machine__update_thread_pid(machine, th, pid);
 		return th;
@@ -386,7 +397,12 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 		return NULL;
 
 	th = thread__new(pid, tid);
-	if (th != NULL) {
+	/*
+	 * new a struct thread,
+	 * new a struct comm, find/new struct comm_str from/to comm_str_root, comm->comm_str->ref++, eg. comm_str->str = ":1"
+	 * link comm to thread->comm_list(list)
+	 */
+	if (th != NULL) {/* insert thread to machine->threads, init thread->mg, update machine->last_match */ 
 		rb_link_node(&th->rb_node, parent, p);
 		rb_insert_color(&th->rb_node, &machine->threads);
 
@@ -407,6 +423,7 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 		machine->last_match = th;
 	}
 
+	printf("th->pid = %d, th->tid = %d\n", th->pid_, th->tid);
 	return th;
 }
 
@@ -437,6 +454,14 @@ int machine__process_comm_event(struct machine *machine, union perf_event *event
 	struct thread *thread = machine__findnew_thread(machine,
 							event->comm.pid,
 							event->comm.tid);
+	/*
+	 * new a struct thread,
+	 * new a struct comm, find/new struct comm_str from/to comm_str_root, comm->comm_str->ref++, eg. comm_str->str = ":1"
+	 * link comm to thread->comm_list(list)
+	 * insert thread to machine->threads, 
+	 * init thread->mg, 
+	 * update machine->last_match 
+	 */ 
 	bool exec = event->header.misc & PERF_RECORD_MISC_COMM_EXEC;
 
 	if (exec)
@@ -447,6 +472,13 @@ int machine__process_comm_event(struct machine *machine, union perf_event *event
 
 	if (thread == NULL ||
 	    __thread__set_comm(thread, event->comm.comm, sample->time, exec)) {
+	/*
+	 * if(thread->comm_set == 0)
+	 *   update first comm's comm_str      eg. update from ":1" to "init"
+	 * else
+	 *   new comm(eg. comm_str->str = "init") and add to thread->comm_list
+	 * thread->comm_set = 1
+	 */
 		dump_printf("problem processing PERF_RECORD_COMM, skipping event.\n");
 		return -1;
 	}
@@ -597,7 +629,7 @@ struct process_args {
 static void machine__get_kallsyms_filename(struct machine *machine, char *buf,
 					   size_t bufsz)
 {
-	if (machine__is_default_guest(machine))
+	if (machine__is_default_guest(machine)) /* host or guest machine->root_dir = "" */
 		scnprintf(buf, bufsz, "%s", symbol_conf.default_guest_kallsyms);
 	else
 		scnprintf(buf, bufsz, "%s/proc/kallsyms", machine->root_dir);
@@ -617,13 +649,13 @@ static u64 machine__get_running_kernel_start(struct machine *machine,
 	const char *name;
 	u64 addr = 0;
 
-	machine__get_kallsyms_filename(machine, filename, PATH_MAX);
+	machine__get_kallsyms_filename(machine, filename, PATH_MAX); /* if host, filename = "/proc/kallsyms"; if guest, filename = "kallsyms" */
 
-	if (symbol__restricted_filename(filename, "/proc/kallsyms"))
+	if (symbol__restricted_filename(filename, "/proc/kallsyms")) /* host and guest 0 */
 		return 0;
 
-	for (i = 0; (name = ref_reloc_sym_names[i]) != NULL; i++) {
-		addr = kallsyms__get_function_start(filename, name);
+	for (i = 0; (name = ref_reloc_sym_names[i]) != NULL; i++) { /* ref_reloc_sym_names = ["_text, _stext, NULL"] */
+		addr = kallsyms__get_function_start(filename, name); /* host get_function_start from "/proc/kallsyms"; guest get_function_start from "tools/perf/kallsyms" */
 		if (addr)
 			break;
 	}
@@ -1032,10 +1064,10 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 	bool is_kernel_mmap;
 
 	/* If we have maps from kcore then we do not need or want any others */
-	if (machine__uses_kcore(machine))
+	if (machine__uses_kcore(machine)) /* /proc/kcore is like an alias for the memory in your computer */
 		return 0;
 
-	machine__mmap_name(machine, kmmap_prefix, sizeof(kmmap_prefix));
+	machine__mmap_name(machine, kmmap_prefix, sizeof(kmmap_prefix)); /* assign kmmap_prefix by machine is host or guest */
 	if (machine__is_host(machine))
 		kernel_type = DSO_TYPE_KERNEL;
 	else
@@ -1051,26 +1083,26 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 		char *name, *dot;
 
 		if (event->mmap.filename[0] == '/') {
-			name = strrchr(event->mmap.filename, '/');
+			name = strrchr(event->mmap.filename, '/'); /* find the last occurrence of str */
 			if (name == NULL)
 				goto out_problem;
 
-			++name; /* skip / */
-			dot = strrchr(name, '.');
+			++name; /* skip / */ /* eg. name = "pps_core.ko" */
+			dot = strrchr(name, '.'); /* eg. dot = ".ko" */
 			if (dot == NULL)
 				goto out_problem;
 			/* On some system, modules are compressed like .ko.gz */
-			if (is_supported_compression(dot + 1))
-				dot -= 3;
-			if (!is_kmodule_extension(dot + 1))
+			if (is_supported_compression(dot + 1)) /* dot+1 == "gz" */
+				dot -= 3; /* dot = ".ko.gz" */ 
+			if (!is_kmodule_extension(dot + 1)) /* dot+1 == "ko" or "ko.gz" */
 				goto out_problem;
 			snprintf(short_module_name, sizeof(short_module_name),
 					"[%.*s]", (int)(dot - name), name);
-			strxfrchar(short_module_name, '-', '_');
+			strxfrchar(short_module_name, '-', '_'); /* eg. short_module_name = "[pps_core]" */
 		} else
 			strcpy(short_module_name, event->mmap.filename);
 
-		map = machine__new_module(machine, event->mmap.start,
+		map = machine__new_module(machine, event->mmap.start, /* find/new dso from/to machine->kernel_dsos by event->mmap.filename, add a new struct map to machine->kmaps.maps[MAP__FUNCTION](rbtree)  MAP__FUNCTION = 0 */
 					  event->mmap.filename);
 		if (map == NULL)
 			goto out_problem;
@@ -1079,11 +1111,11 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 		if (name == NULL)
 			goto out_problem;
 
-		dso__set_short_name(map->dso, name, true);
+		dso__set_short_name(map->dso, name, true); /* set dso->short_name */
 		map->end = map->start + event->mmap.len;
 	} else if (is_kernel_mmap) {
 		const char *symbol_name = (event->mmap.filename +
-				strlen(kmmap_prefix));
+				strlen(kmmap_prefix)); /* eg. symbol_name = "_text" */
 		/*
 		 * Should be there already, from the build-id table in
 		 * the header.
@@ -1094,35 +1126,48 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 		list_for_each_entry(dso, &machine->kernel_dsos.head, node) {
 			if (is_kernel_module(dso->long_name, NULL))
 				continue;
-
 			kernel = dso;
 			break;
 		}
 
 		if (kernel == NULL)
-			kernel = __dsos__findnew(&machine->kernel_dsos,
+			kernel = __dsos__findnew(&machine->kernel_dsos, /* find/new dso from/to machine->kernel_dsos by kmmap_prefix */
 						 kmmap_prefix);
 		if (kernel == NULL)
 			goto out_problem;
 
-		kernel->kernel = kernel_type;
+		kernel->kernel = kernel_type; /* host is DSO_TYPE_KERNEL 1, guest is DSO_TYPE_GUEST_KERNEL 2 */
 		if (__machine__create_kernel_maps(machine, kernel) < 0)
 			goto out_problem;
+		/*
+		 * new two struct map link to machine->vmlinux_maps[0] or machine->vmlinux_maps[1], insert new map to machine->kmaps->maps[0] or machine->kmaps->maps[1]
+		 * map->start = ffffffff81000000, host from /proc/kallsyms, guest from tools/perf/kallsyms
+		 * map->map_ip = map->unmap_ip = identity__map_ip 
+		 * kmap = (struct kmap *)(map+1)
+		 * kmap->kmaps = &machine->kmaps
+		 */
 
-		if (strstr(kernel->long_name, "vmlinux"))
+		if (strstr(kernel->long_name, "vmlinux")) /* host is "[kernel.kallsyms]"; guest is "[guest.kernel.kallsyms]"*/
 			dso__set_short_name(kernel, "[kernel.vmlinux]", false);
 
-		machine__set_kernel_mmap_len(machine, event);
+		machine__set_kernel_mmap_len(machine, event); /* set machine->vmlinux_maps[]->start/end */
 
 		/*
 		 * Avoid using a zero address (kptr_restrict) for the ref reloc
 		 * symbol. Effectively having zero here means that at record
 		 * time /proc/sys/kernel/kptr_restrict was non zero.
 		 */
-		if (event->mmap.pgoff != 0) {
+		if (event->mmap.pgoff != 0) { /* host and guest are ffffffff81000000 */
 			maps__set_kallsyms_ref_reloc_sym(machine->vmlinux_maps,
-							 symbol_name,
+							 symbol_name, /* "_text" */
 							 event->mmap.pgoff);
+			/*
+			 * new a struct ref_reloc_sym ref
+			 * ref->addr = event->mmap.pgoff 
+			 * ref->name = symbol_name (_text)
+			 * there are two struct kmap, link to machine->vmlinux_maps[0/1]
+			 * kmap->ref_reloc_sym = ref
+			 */
 		}
 
 		if (machine__is_default_guest(machine)) {
@@ -1181,7 +1226,7 @@ int machine__process_mmap2_event(struct machine *machine,
 	if (map == NULL)
 		goto out_problem;
 
-	thread__insert_map(thread, map);
+	thread__insert_map(thread, map); /* insert the new struct map to thread->mg(map_groups) */
 	return 0;
 
 out_problem:
@@ -1201,7 +1246,7 @@ int machine__process_mmap_event(struct machine *machine, union perf_event *event
 	if (dump_trace)
 		perf_event__fprintf_mmap(event, stdout);
 
-	if (cpumode == PERF_RECORD_MISC_GUEST_KERNEL ||
+	if (cpumode == PERF_RECORD_MISC_GUEST_KERNEL || /* 4||1 */
 	    cpumode == PERF_RECORD_MISC_KERNEL) {
 		ret = machine__process_kernel_mmap_event(machine, event);
 		if (ret < 0)

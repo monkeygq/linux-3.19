@@ -68,7 +68,7 @@ struct perf_evsel {
 	u64			*id;
 	struct perf_counts	*counts;
 	struct perf_counts	*prev_raw_counts;
-	int			idx;
+	int			idx; /* perf_evlist index */
 	u32			ids;
 	char			*name;
 	double			scale;
@@ -83,7 +83,7 @@ struct perf_evsel {
 	struct cgroup_sel	*cgrp;
 	void			*handler;
 	struct cpu_map		*cpus;
-	unsigned int		sample_size;
+	unsigned int		sample_size; /* perf_event_attr.sample_type cnt */
 	int			id_pos;
 	int			is_pos;
 	bool 			supported;
@@ -91,7 +91,7 @@ struct perf_evsel {
 	bool			no_aux_samples;
 	bool			immediate;
 	bool			system_wide;
-	bool			tracking;
+	bool			tracking; /* !idx */
 	bool			per_pkg;
 	unsigned long		*per_pkg_mask;
 	/* parse modifier helper */

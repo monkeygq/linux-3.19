@@ -149,7 +149,7 @@ static const struct {
 	{ "gz", gzip_decompress_to_file },
 #endif
 	{ NULL, NULL },
-};
+}; /* [ {"gz, gzip_decompress_to_file"}, {NULL, NULL} ] */
 
 bool is_supported_compression(const char *ext)
 {

@@ -1540,6 +1540,20 @@ int cmd_kvm(int argc, const char **argv, const char *prefix __maybe_unused)
 
 	argc = parse_options_subcommand(argc, argv, kvm_options, kvm_subcommands, kvm_usage,
 					PARSE_OPT_STOP_AT_NON_OPTION);
+/*
+ *	printf("++++++++++++++++++++tools/perf/builtin_kvm.c++++++++++++++++++++\n");
+ *	printf("++++++++++++parse perf kvm cmd, assign to kvm_options++++++++++++\n");
+ *	printf("kvm_options cnt = %ld\n", sizeof(kvm_options) / sizeof(kvm_options[0]));
+ *	for(unsigned int i = 0; i < sizeof(kvm_options) / sizeof(kvm_options[0]) - 1; i++) {
+ *		printf("%s    ", kvm_options[i].long_name);
+ *		if(kvm_options[i].type == OPTION_STRING)
+ *			printf("value = %s    ", *(char **)kvm_options[i].value);
+ *		if(kvm_options[i].type == OPTION_BOOLEAN)
+ *			printf("value = %d", *(int *)kvm_options[i].value);
+ *		printf("\n");
+ *	}
+ *	printf("++++++++++++++++++++tools/perf/builtin_kvm.c++++++++++++++++++++\n");
+ */
 	if (!argc)
 		usage_with_options(kvm_usage, kvm_options);
 

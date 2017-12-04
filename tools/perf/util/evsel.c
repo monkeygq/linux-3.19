@@ -203,7 +203,7 @@ void perf_evsel__init(struct perf_evsel *evsel,
 	evsel->scale	   = 1.0;
 	INIT_LIST_HEAD(&evsel->node);
 	perf_evsel__object.init(evsel);
-	evsel->sample_size = __perf_evsel__sample_size(attr->sample_type);
+	evsel->sample_size = __perf_evsel__sample_size(attr->sample_type); /* perf_event_attr.sample_type cnt */
 	perf_evsel__calc_id_pos(evsel);
 }
 

@@ -526,7 +526,7 @@ void perf_hpp__cancel_cumulate(void)
 		return;
 
 	perf_hpp__column_disable(PERF_HPP__OVERHEAD_ACC);
-	perf_hpp__format[PERF_HPP__OVERHEAD].name = "Overhead";
+	perf_hpp__format[PERF_HPP__OVERHEAD].name = "Overhead"; /* about output */
 }
 
 void perf_hpp__setup_output_field(void)

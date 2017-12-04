@@ -46,7 +46,7 @@ struct thread *thread__new(pid_t pid, pid_t tid)
 		if (!comm_str)
 			goto err_thread;
 
-		snprintf(comm_str, 32, ":%d", tid);
+		snprintf(comm_str, 32, ":%d", tid); /* eg. :1 */
 		comm = comm__new(comm_str, 0, false);
 		free(comm_str);
 		if (!comm)
@@ -106,15 +106,15 @@ struct comm *thread__exec_comm(const struct thread *thread)
 int __thread__set_comm(struct thread *thread, const char *str, u64 timestamp,
 		       bool exec)
 {
-	struct comm *new, *curr = thread__comm(thread);
+	struct comm *new, *curr = thread__comm(thread); /* thread->comm_list's first comm */
 	int err;
 
 	/* Override the default :tid entry */
-	if (!thread->comm_set) {
-		err = comm__override(curr, str, timestamp, exec);
+	if (!thread->comm_set) { 
+		err = comm__override(curr, str, timestamp, exec); /* update first comm's comm_str  eg. update from ":1" to "init"*/
 		if (err)
 			return err;
-	} else {
+	} else { /* new comm and add to thread->comm_list */
 		new = comm__new(str, timestamp, exec);
 		if (!new)
 			return -ENOMEM;

@@ -295,7 +295,7 @@ struct dso *vdso__dso_findnew(struct machine *machine,
 		return NULL;
 
 #if BITS_PER_LONG == 64
-	if (vdso__dso_findnew_compat(machine, thread, vdso_info, &dso))
+	if (vdso__dso_findnew_compat(machine, thread, vdso_info, &dso)) /* 0 */
 		return dso;
 #endif
 

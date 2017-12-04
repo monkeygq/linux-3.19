@@ -218,7 +218,7 @@ static int report__setup_sample_type(struct report *rep)
 	u64 sample_type = perf_evlist__combined_sample_type(session->evlist);
 	bool is_pipe = perf_data_file__is_pipe(session->file);
 
-	if (!is_pipe && !(sample_type & PERF_SAMPLE_CALLCHAIN)) {
+	if (!is_pipe && !(sample_type & PERF_SAMPLE_CALLCHAIN)) { /* 1 */
 		if (sort__has_parent) {
 			ui__error("Selected --sort parent, but no "
 				    "callchain data. Did you call "
@@ -249,7 +249,7 @@ static int report__setup_sample_type(struct report *rep)
 		}
 	}
 
-	if (sort__mode == SORT_MODE__BRANCH) {
+	if (sort__mode == SORT_MODE__BRANCH) { /* 0 */
 		if (!is_pipe &&
 		    !(sample_type & PERF_SAMPLE_BRANCH_STACK)) {
 			ui__error("Selected -b but no branch data. "
@@ -258,7 +258,7 @@ static int report__setup_sample_type(struct report *rep)
 		}
 	}
 
-	if (symbol_conf.use_callchain || symbol_conf.cumulate_callchain) {
+	if (symbol_conf.use_callchain || symbol_conf.cumulate_callchain) { /* 0 */
 		if ((sample_type & PERF_SAMPLE_REGS_USER) &&
 		    (sample_type & PERF_SAMPLE_STACK_USER))
 			callchain_param.record_mode = CALLCHAIN_DWARF;
@@ -735,6 +735,21 @@ int cmd_report(int argc, const char **argv, const char *prefix __maybe_unused)
 
 	argc = parse_options(argc, argv, options, report_usage, 0);
 
+/*
+        printf("++++++++++++++++++++tools/perf/builtin_report.c++++++++++++++++++++\n");
+        printf("++++++++++++parse perf kvm cmd, assign to options++++++++++++\n");
+        printf("options cnt = %ld\n", sizeof(options) / sizeof(options[0]));
+        for(unsigned int i = 0; i < sizeof(options) / sizeof(options[0]) - 1; i++) {
+                printf("%s    ", options[i].long_name);
+                if(options[i].type == OPTION_STRING)
+                        printf("value = %s    ", *(char **)options[i].value);
+                if(options[i].type == OPTION_BOOLEAN)
+                        printf("value = %d", *(int *)options[i].value);
+                printf("\n");
+        }
+        printf("++++++++++++++++++++tools/perf/builtin_report.c++++++++++++++++++++\n");
+*/
+
 	if (report.use_stdio)
 		use_browser = 0;
 	else if (report.use_tui)
@@ -798,7 +813,7 @@ repeat:
 		symbol_conf.cumulate_callchain = false;
 	}
 
-	if (setup_sorting() < 0) {
+	if (setup_sorting() < 0) { /* about output: result format */
 		if (sort_order)
 			parse_options_usage(report_usage, options, "s", 1);
 		if (field_order)
@@ -811,8 +826,14 @@ repeat:
 	if (report.header || report.header_only)
 		use_browser = 0;
 
-	if (strcmp(input_name, "-") != 0)
-		setup_browser(true);
+	if (strcmp(input_name, "-") != 0) { /* about output */
+		//setup_browser(true); 
+
+		/* annotated by hougq, 
+		 * for later debug output can be printed at the terminal by printf()
+                 * analysis results are printed at the terminal, too.
+		 */
+	}
 	else
 		use_browser = 0;
 

@@ -37,8 +37,8 @@ static const char **header_argv;
  * we check for legacy (PERFFILE) format.
  */
 static const char *__perf_magic1 = "PERFFILE";
-static const u64 __perf_magic2    = 0x32454c4946524550ULL;
-static const u64 __perf_magic2_sw = 0x50455246494c4532ULL;
+static const u64 __perf_magic2    = 0x32454c4946524550ULL; /* 2ELIFREP */
+static const u64 __perf_magic2_sw = 0x50455246494c4532ULL; /* PERFILE2 */
 
 #define PERF_MAGIC	__perf_magic2
 
@@ -2108,7 +2108,7 @@ int perf_header__process_sections(struct perf_header *header, int fd,
 	int feat;
 	int err;
 
-	nr_sections = bitmap_weight(header->adds_features, HEADER_FEAT_BITS);
+	nr_sections = bitmap_weight(header->adds_features, HEADER_FEAT_BITS); /* nr of 1 in bitmap */
 	if (!nr_sections)
 		return 0;
 
@@ -2339,7 +2339,7 @@ static int perf_file_section__process(struct perf_file_section *section,
 		return 0;
 	}
 
-	if (!feat_ops[feat].process)
+	if (!feat_ops[feat].process) /* header.c L1858 static const struct feature_ops feat_ops[]*/
 		return 0;
 
 	return feat_ops[feat].process(section, ph, fd, data);

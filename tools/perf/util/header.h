@@ -94,7 +94,7 @@ struct perf_header {
 	bool				needs_swap;
 	u64				data_offset;
 	u64				data_size;
-	u64				feat_offset;
+	u64				feat_offset; /* data_offset + data_size */
 	DECLARE_BITMAP(adds_features, HEADER_FEAT_BITS);
 	struct perf_session_env 	env;
 };

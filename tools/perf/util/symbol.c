@@ -222,12 +222,12 @@ void __map_groups__fixup_end(struct map_groups *mg, enum map_type type)
 struct symbol *symbol__new(u64 start, u64 len, u8 binding, const char *name)
 {
 	size_t namelen = strlen(name) + 1;
-	struct symbol *sym = calloc(1, (symbol_conf.priv_size +
+	struct symbol *sym = calloc(1, (symbol_conf.priv_size + /* 0 */
 					sizeof(*sym) + namelen));
 	if (sym == NULL)
 		return NULL;
 
-	if (symbol_conf.priv_size)
+	if (symbol_conf.priv_size) /* 0 */
 		sym = ((void *)sym) + symbol_conf.priv_size;
 
 	sym->start   = start;
@@ -594,7 +594,7 @@ static int map__process_kallsym_symbol(void *arg, const char *name,
 	struct process_kallsyms_args *a = arg;
 	struct rb_root *root = &a->dso->symbols[a->map->type];
 
-	if (!symbol_type__is_a(type, a->map->type))
+	if (!symbol_type__is_a(type, a->map->type)) /*  T/W/D return 1, T/W: MAP__FUNCTION      D: MAP__VARIABLE */
 		return 0;
 
 	/*
@@ -603,13 +603,21 @@ static int map__process_kallsym_symbol(void *arg, const char *name,
 	 * symbols__fixup_end() to fix it up.
 	 */
 	sym = symbol__new(start, 0, kallsyms2elf_type(type), name);
+	/*
+	 * new a struct symbol sym
+	 * sym->start = start
+	 * sym->end = start
+	 * sym->binding = kallsyms2elf_type(type)
+	 * sym->namelen = strlen(name) 
+	 * sym->name = name
+	 */
 	if (sym == NULL)
 		return -ENOMEM;
 	/*
 	 * We will pass the symbols to the filter later, in
 	 * map__split_kallsyms, when we have split the maps per module
 	 */
-	symbols__insert(root, sym);
+	symbols__insert(root, sym); /* insert sym to dso->symbols[map->type] */
 
 	return 0;
 }
@@ -696,14 +704,14 @@ static int dso__split_kallsyms(struct dso *dso, struct map *map, u64 delta,
 		pos = rb_entry(next, struct symbol, rb_node);
 		next = rb_next(&pos->rb_node);
 
-		module = strchr(pos->name, '\t');
+		module = strchr(pos->name, '\t'); /* eg. pos->name = "startup_64" or "mii_get_an	[mii]" */
 		if (module) {
 			if (!symbol_conf.use_modules)
 				goto discard_symbol;
 
-			*module++ = '\0';
+			*module++ = '\0'; /* eg. module = "[mii]" */
 
-			if (strcmp(curr_map->dso->short_name, module)) {
+			if (strcmp(curr_map->dso->short_name, module)) { /* if short_name != module, then curr_map is updated by module */
 				if (curr_map != map &&
 				    dso->kernel == DSO_TYPE_GUEST_KERNEL &&
 				    machine__is_default_guest(machine)) {
@@ -737,8 +745,8 @@ static int dso__split_kallsyms(struct dso *dso, struct map *map, u64 delta,
 			 * So that we look just like we get from .ko files,
 			 * i.e. not prelinked, relative to map->start.
 			 */
-			pos->start = curr_map->map_ip(curr_map, pos->start);
-			pos->end   = curr_map->map_ip(curr_map, pos->end);
+			pos->start = curr_map->map_ip(curr_map, pos->start); /* relative offset by curr_map->start */
+			pos->end   = curr_map->map_ip(curr_map, pos->end); /* relative offset by curr_map->end */
 		} else if (curr_map != map) {
 			char dso_name[PATH_MAX];
 			struct dso *ndso;
@@ -788,7 +796,7 @@ filter_symbol:
 discard_symbol:		rb_erase(&pos->rb_node, root);
 			symbol__delete(pos);
 		} else {
-			if (curr_map != map) {
+			if (curr_map != map) { /* spilt symbol to corrent map(curr_map) */ 
 				rb_erase(&pos->rb_node, root);
 				symbols__insert(&curr_map->dso->symbols[curr_map->type], pos);
 				++moved;
@@ -811,7 +819,7 @@ bool symbol__restricted_filename(const char *filename,
 {
 	bool restricted = false;
 
-	if (symbol_conf.kptr_restrict) {
+	if (symbol_conf.kptr_restrict) { /* 0 */
 		char *r = realpath(filename, NULL);
 
 		if (r != NULL) {
@@ -1205,7 +1213,7 @@ static int kallsyms__delta(struct map *map, const char *filename, u64 *delta)
 		return 0;
 
 	addr = kallsyms__get_function_start(filename,
-					    kmap->ref_reloc_sym->name);
+					    kmap->ref_reloc_sym->name); /* "_text" */
 	if (!addr)
 		return -1;
 
@@ -1218,27 +1226,33 @@ int dso__load_kallsyms(struct dso *dso, const char *filename,
 {
 	u64 delta = 0;
 
-	if (symbol__restricted_filename(filename, "/proc/kallsyms"))
+	if (symbol__restricted_filename(filename, "/proc/kallsyms")) /* 0 */
 		return -1;
 
-	if (dso__load_all_kallsyms(dso, filename, map) < 0)
+	if (dso__load_all_kallsyms(dso, filename, map) < 0) /* read file by filename, new struct symbol, insert symbol to dso->symbols[map->type] */
 		return -1;
 
-	if (kallsyms__delta(map, filename, &delta))
+	if (kallsyms__delta(map, filename, &delta)) /* set delta = addr(_text's addr in kallsyms file) - kmap->ref_reloc_sym->addr(event->mmap.pgoff) */
 		return -1;
 
 	symbols__fixup_duplicate(&dso->symbols[map->type]);
-	symbols__fixup_end(&dso->symbols[map->type]);
+	/*
+	 * inorder traversal rbtree.
+	 * struct symbol *curr, *next
+	 * duplicate means curr->start == next->start, then delete curr or next by some ways. 
+	 */
+
+	symbols__fixup_end(&dso->symbols[map->type]); /* fix symbol->end */
 
 	if (dso->kernel == DSO_TYPE_GUEST_KERNEL)
-		dso->symtab_type = DSO_BINARY_TYPE__GUEST_KALLSYMS;
+		dso->symtab_type = DSO_BINARY_TYPE__GUEST_KALLSYMS; /* 1 */
 	else
-		dso->symtab_type = DSO_BINARY_TYPE__KALLSYMS;
+		dso->symtab_type = DSO_BINARY_TYPE__KALLSYMS; /* 0 */
 
-	if (!dso__load_kcore(dso, map, filename))
+	if (!dso__load_kcore(dso, map, filename)) /* 0 */
 		return dso__split_kallsyms_for_kcore(dso, map, filter);
 	else
-		return dso__split_kallsyms(dso, map, delta, filter);
+		return dso__split_kallsyms(dso, map, delta, filter); /* update symbol->start and symbol->end, split symbols to correct map->dso->symbols[type] */
 }
 
 static int dso__load_perf_map(struct dso *dso, struct map *map,
@@ -1357,7 +1371,7 @@ int dso__load(struct dso *dso, struct map *map, symbol_filter_t filter)
 	struct symsrc *syms_ss = NULL, *runtime_ss = NULL;
 	bool kmod;
 
-	dso__set_loaded(dso, map->type);
+	dso__set_loaded(dso, map->type); /* set dso->loaded */
 
 	if (dso->kernel == DSO_TYPE_KERNEL)
 		return dso__load_kernel_sym(dso, map, filter);
@@ -1753,22 +1767,26 @@ static int dso__load_guest_kernel_sym(struct dso *dso, struct map *map,
 			return err;
 		}
 
-		kallsyms_filename = symbol_conf.default_guest_kallsyms;
+		kallsyms_filename = symbol_conf.default_guest_kallsyms; /* "kallsyms" */
 		if (!kallsyms_filename)
 			return -1;
 	} else {
 		sprintf(path, "%s/proc/kallsyms", machine->root_dir);
 		kallsyms_filename = path;
 	}
-
-	err = dso__load_kallsyms(dso, kallsyms_filename, map, filter);
+	err = dso__load_kallsyms(dso, kallsyms_filename, map, filter); /* key function */
 	if (err > 0)
 		pr_debug("Using %s for symbols\n", kallsyms_filename);
 	if (err > 0 && !dso__is_kcore(dso)) {
 		dso->binary_type = DSO_BINARY_TYPE__GUEST_KALLSYMS;
 		machine__mmap_name(machine, path, sizeof(path));
 		dso__set_long_name(dso, strdup(path), true);
-		map__fixup_start(map);
+		/* map->dso->long_name = "[guest.kernel.kallsyms]" */
+		/* sym = rb_first(&map->dso->symbols[map->type]) 
+		 * map->start = sym->start
+		 * map->end = map->end
+		 */
+		map__fixup_start(map); 
 		map__fixup_end(map);
 	}
 

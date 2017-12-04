@@ -764,6 +764,7 @@ static struct machine *
 		else
 			pid = sample->pid;
 
+		printf("pid for find machine = %d\n", pid);
 		machine = perf_session__find_machine(session, pid);
 		if (!machine)
 			machine = perf_session__findnew_machine(session,
@@ -858,8 +859,9 @@ int perf_session__deliver_event(struct perf_session *session,
 	machine = perf_session__find_machine_for_cpumode(session, event,
 							 sample);
 
+	printf("type = %d, misc = %d, machine->pid = %d++++++++++++++++++++++++++++++++++++++++++\n", event->header.type, event->header.misc, machine->pid);
 	switch (event->header.type) {
-	case PERF_RECORD_SAMPLE:
+	case PERF_RECORD_SAMPLE: /* 9 */
 		dump_sample(evsel, event, sample);
 		if (evsel == NULL) {
 			++session->stats.nr_unknown_id;
@@ -871,25 +873,26 @@ int perf_session__deliver_event(struct perf_session *session,
 		}
 		return perf_session__deliver_sample(session, tool, event,
 						    sample, evsel, machine);
-	case PERF_RECORD_MMAP:
+	case PERF_RECORD_MMAP: /* 1 */ /* event->header.misc = 1 or 4 KERNEL */
 		return tool->mmap(tool, event, sample, machine);
-	case PERF_RECORD_MMAP2:
+	case PERF_RECORD_MMAP2: /* 10 */ /* event->header.misc = 2 USER */
 		return tool->mmap2(tool, event, sample, machine);
-	case PERF_RECORD_COMM:
+	case PERF_RECORD_COMM: /* 3 */
+		printf("comm->pid = %d, comm->tid = %d\n", event->comm.pid, event->comm.tid);
 		return tool->comm(tool, event, sample, machine);
-	case PERF_RECORD_FORK:
+	case PERF_RECORD_FORK: /* 7 */
 		return tool->fork(tool, event, sample, machine);
-	case PERF_RECORD_EXIT:
+	case PERF_RECORD_EXIT: /* 4 */
 		return tool->exit(tool, event, sample, machine);
-	case PERF_RECORD_LOST:
+	case PERF_RECORD_LOST: /* 2 */
 		if (tool->lost == perf_event__process_lost)
 			session->stats.total_lost += event->lost.lost;
 		return tool->lost(tool, event, sample, machine);
-	case PERF_RECORD_READ:
+	case PERF_RECORD_READ: /* 8*/
 		return tool->read(tool, event, sample, evsel, machine);
-	case PERF_RECORD_THROTTLE:
+	case PERF_RECORD_THROTTLE: /* 5 */
 		return tool->throttle(tool, event, sample, machine);
-	case PERF_RECORD_UNTHROTTLE:
+	case PERF_RECORD_UNTHROTTLE: /* 6 */
 		return tool->unthrottle(tool, event, sample, machine);
 	default:
 		++session->stats.nr_unknown_events;
@@ -929,7 +932,7 @@ static s64 perf_session__process_user_event(struct perf_session *session,
 	case PERF_RECORD_HEADER_BUILD_ID:
 		return tool->build_id(tool, event, session);
 	case PERF_RECORD_FINISHED_ROUND:
-		return tool->finished_round(tool, event, session);
+		return tool->finished_round(tool, event, session); /* /util/session.c process_finished_round */
 	case PERF_RECORD_ID_INDEX:
 		return tool->id_index(tool, event, session);
 	default:
@@ -1022,7 +1025,7 @@ static s64 perf_session__process_event(struct perf_session *session,
 	struct perf_sample sample;
 	int ret;
 
-	if (session->header.needs_swap)
+	if (session->header.needs_swap) /* 0 */
 		event_swap(event, perf_evlist__sample_id_all(session->evlist));
 
 	if (event->header.type >= PERF_RECORD_HEADER_MAX)
@@ -1226,7 +1229,7 @@ fetch_mmaped_event(struct perf_session *session,
 
 	event = (union perf_event *)(buf + head);
 
-	if (session->header.needs_swap)
+	if (session->header.needs_swap) /* 0 */
 		perf_event_header__bswap(&event->header);
 
 	if (head + event->header.size > mmap_size) {
@@ -1286,7 +1289,7 @@ int __perf_session__process_events(struct perf_session *session,
 	mmap_prot  = PROT_READ;
 	mmap_flags = MAP_SHARED;
 
-	if (session->header.needs_swap) {
+	if (session->header.needs_swap) { /* 0 */
 		mmap_prot  |= PROT_WRITE;
 		mmap_flags = MAP_PRIVATE;
 	}
@@ -1300,10 +1303,10 @@ remap:
 	}
 	mmaps[map_idx] = buf;
 	map_idx = (map_idx + 1) & (ARRAY_SIZE(mmaps) - 1);
-	file_pos = file_offset + head;
-	if (session->one_mmap) {
+	file_pos = file_offset + head; /* 224 */
+	if (session->one_mmap) { /* 1 */
 		session->one_mmap_addr = buf;
-		session->one_mmap_offset = file_offset;
+		session->one_mmap_offset = file_offset; /* 0 */
 	}
 
 more:
