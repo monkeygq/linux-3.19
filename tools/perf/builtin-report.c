@@ -155,16 +155,20 @@ static int process_sample_event(struct perf_tool *tool,
 	};
 	int ret;
 
-	if (perf_event__preprocess_sample(event, machine, &al, sample) < 0) {
+	if (perf_event__preprocess_sample(event, machine, &al, sample) < 0) { /* 0 < 0 */
+	/* 
+	 * assign struct addr_location al
+	 * only guest kernel sample's al->sym can be found, other samples al->sym = NULL
+	 */
 		pr_debug("problem processing %d event, skipping it.\n",
 			 event->header.type);
 		return -1;
 	}
 
-	if (rep->hide_unresolved && al.sym == NULL)
+	if (rep->hide_unresolved && al.sym == NULL) /* rep->hide_unresolved = 0 */
 		return 0;
 
-	if (rep->cpu_list && !test_bit(sample->cpu, rep->cpu_bitmap))
+	if (rep->cpu_list && !test_bit(sample->cpu, rep->cpu_bitmap)) /* rep->cpu_list = 0 */
 		return 0;
 
 	if (sort__mode == SORT_MODE__BRANCH)
@@ -173,10 +177,11 @@ static int process_sample_event(struct perf_tool *tool,
 		iter.ops = &hist_iter_mem;
 	else if (symbol_conf.cumulate_callchain)
 		iter.ops = &hist_iter_cumulative;
-	else
-		iter.ops = &hist_iter_normal;
+	else /* 1 */
+		iter.ops = &hist_iter_normal; /* hist_iter_normal in /util/hist.c */
+	/* iter.ops == &hist_iter_normal */
 
-	if (al.map != NULL)
+	if (al.map != NULL) /* only guest kernel sample's al->sym can be found, other samples al->sym = NULL */
 		al.map->dso->hit = 1;
 
 	ret = hist_entry_iter__add(&iter, &al, evsel, sample, rep->max_stack,

@@ -295,10 +295,13 @@ int map__load(struct map *map, symbol_filter_t filter)
 struct symbol *map__find_symbol(struct map *map, u64 addr,
 				symbol_filter_t filter)
 {
-	if (map__load(map, filter) < 0)
+	if (map__load(map, filter) < 0) /* 0 */
 		return NULL;
 
 	return dso__find_symbol(map->dso, map->type, addr);
+	/*
+	 * find symbol from map->dso->symbols[type] by addr(symbol->start <= addr <= symbol=>end)
+	 */
 }
 
 struct symbol *map__find_symbol_by_name(struct map *map, const char *name,

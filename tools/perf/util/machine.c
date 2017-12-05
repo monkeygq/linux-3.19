@@ -355,8 +355,11 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 						pid_t pid, pid_t tid,
 						bool create)
 /*
- * machine_process_comm_event use this function to new thread
- * machine_process_mmap2_event use this function to find thread
+ * 1. machine_process_comm_event use this function to new thread.
+ * 2. machine_process_mmap2_event use this function to find thread.
+ * 3. process_sample_event use this function to find thread, 
+ * if machine is guest, new thread to guest machine, eg. pid = 2717, tid = 2719, add two threads(pid = 2717, tid = 2719; pid = 2717, tid = 2719).
+ * 4. null
  */
 {
 	struct rb_node **p = &machine->threads.rb_node;
@@ -369,9 +372,6 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 	 * the full rbtree:
 	 */
 	th = machine->last_match;
-	printf("last match ? %d, pid = %d, tid = %d\n", !!th, pid, tid);
-	if(th)
-		printf("last match pid = %d, last match tid = %d\n", th->pid_, th->tid);
 	if (th && th->tid == tid) {
 		machine__update_thread_pid(machine, th, pid);
 		return th;
@@ -423,7 +423,6 @@ static struct thread *__machine__findnew_thread(struct machine *machine,
 		machine->last_match = th;
 	}
 
-	printf("th->pid = %d, th->tid = %d\n", th->pid_, th->tid);
 	return th;
 }
 

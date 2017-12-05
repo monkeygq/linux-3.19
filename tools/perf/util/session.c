@@ -764,7 +764,6 @@ static struct machine *
 		else
 			pid = sample->pid;
 
-		printf("pid for find machine = %d\n", pid);
 		machine = perf_session__find_machine(session, pid);
 		if (!machine)
 			machine = perf_session__findnew_machine(session,
@@ -832,8 +831,8 @@ perf_session__deliver_sample(struct perf_session *session,
 	u64 read_format = evsel->attr.read_format;
 
 	/* Standard sample delievery. */
-	if (!(sample_type & PERF_SAMPLE_READ))
-		return tool->sample(tool, event, sample, evsel, machine);
+	if (!(sample_type & PERF_SAMPLE_READ)) /* 1 */
+		return tool->sample(tool, event, sample, evsel, machine); /* tools/perf/builtin-report.c  process_sample_event */
 
 	/* For PERF_SAMPLE_READ we have either single or group mode. */
 	if (read_format & PERF_FORMAT_GROUP)
@@ -859,7 +858,7 @@ int perf_session__deliver_event(struct perf_session *session,
 	machine = perf_session__find_machine_for_cpumode(session, event,
 							 sample);
 
-	printf("type = %d, misc = %d, machine->pid = %d++++++++++++++++++++++++++++++++++++++++++\n", event->header.type, event->header.misc, machine->pid);
+	printf("type = %d, misc = %d, machine->pid = %d, pid = %d, tid = %d++++++++++\n", event->header.type, event->header.misc, machine->pid, sample->pid, sample->tid);
 	switch (event->header.type) {
 	case PERF_RECORD_SAMPLE: /* 9 */
 		dump_sample(evsel, event, sample);
@@ -878,7 +877,6 @@ int perf_session__deliver_event(struct perf_session *session,
 	case PERF_RECORD_MMAP2: /* 10 */ /* event->header.misc = 2 USER */
 		return tool->mmap2(tool, event, sample, machine);
 	case PERF_RECORD_COMM: /* 3 */
-		printf("comm->pid = %d, comm->tid = %d\n", event->comm.pid, event->comm.tid);
 		return tool->comm(tool, event, sample, machine);
 	case PERF_RECORD_FORK: /* 7 */
 		return tool->fork(tool, event, sample, machine);

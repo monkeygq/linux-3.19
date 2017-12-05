@@ -741,7 +741,7 @@ void thread__find_addr_map(struct thread *thread, u8 cpumode,
 
 	al->machine = machine;
 	al->thread = thread;
-	al->addr = addr;
+	al->addr = addr; /* struct perf_sample sample->ip */
 	al->cpumode = cpumode;
 	al->filtered = 0;
 
@@ -779,6 +779,10 @@ void thread__find_addr_map(struct thread *thread, u8 cpumode,
 	}
 try_again:
 	al->map = map_groups__find(mg, type, al->addr);
+	/*
+	 * find map(map->start <= addr <= map->end) from thread->mg->maps[type](rbtree)
+	 * only guest kernel sample(type = 9, misc = 4), map can be found(al->map != NULL)
+	 */
 	if (al->map == NULL) {
 		/*
 		 * If this is outside of all known maps, and is a negative
@@ -789,6 +793,11 @@ try_again:
 		 * "[vdso]" dso, but for now lets use the old trick of looking
 		 * in the whole kernel symbol list.
 		 */
+
+		/*
+		 * type = 9, misc = 5 is guest user's addr, we dont have guest user's map, so al->map = NULL.
+		 * how can I get guest user's map.
+		 */
 		if (cpumode == PERF_RECORD_MISC_USER && machine &&
 		    mg != &machine->kmaps &&
 		    machine__kernel_ip(machine, al->addr)) {
@@ -796,14 +805,15 @@ try_again:
 			load_map = true;
 			goto try_again;
 		}
-	} else {
+	} else {/* al->map != NULL only guest kernel sample(type = 9, misc = 4), map can be found(al->map != NULL)*/
 		/*
 		 * Kernel maps might be changed when loading symbols so loading
 		 * must be done prior to using kernel maps.
 		 */
-		if (load_map)
-			map__load(al->map, machine->symbol_filter);
-		al->addr = al->map->map_ip(al->map, al->addr);
+		printf("al map dso name = %s\n", al->map->dso->long_name);
+		if (load_map) /* cpumode == PERF_RECORD_MISC_KERNEL || PERF_RECORD_MISC_GUEST_KERNEL*/
+			map__load(al->map, machine->symbol_filter); /* dso__load again */
+		al->addr = al->map->map_ip(al->map, al->addr); /* map_ip return al->addr, do noting*/
 	}
 }
 
@@ -844,17 +854,21 @@ int perf_event__preprocess_sample(const union perf_event *event,
 		machine__create_kernel_maps(machine);
 
 	thread__find_addr_map(thread, cpumode, MAP__FUNCTION, sample->ip, al);
+	/*
+	 * assign struct addr_location al
+	 * can only find guest kernel sample(type = 9, misc = 4), after find, do noting....!!!
+	 */
 	dump_printf(" ...... dso: %s\n",
 		    al->map ? al->map->dso->long_name :
 			al->level == 'H' ? "[hypervisor]" : "<not found>");
 
-	if (thread__is_filtered(thread))
+	if (thread__is_filtered(thread)) /* 0 */
 		al->filtered |= (1 << HIST_FILTER__THREAD);
 
 	al->sym = NULL;
 	al->cpu = sample->cpu;
 
-	if (al->map) {
+	if (al->map) { /* guest kernel sample(type = 9, misc = 4) */
 		struct dso *dso = al->map->dso;
 
 		if (symbol_conf.dso_list &&
@@ -862,17 +876,17 @@ int perf_event__preprocess_sample(const union perf_event *event,
 						  dso->short_name) ||
 			       (dso->short_name != dso->long_name &&
 				strlist__has_entry(symbol_conf.dso_list,
-						   dso->long_name))))) {
+						   dso->long_name))))) { /* 0 */
 			al->filtered |= (1 << HIST_FILTER__DSO);
 		}
 
 		al->sym = map__find_symbol(al->map, al->addr,
-					   machine->symbol_filter);
+					   machine->symbol_filter); /* machine->symbol_filter = NULL */
 	}
 
 	if (symbol_conf.sym_list &&
 		(!al->sym || !strlist__has_entry(symbol_conf.sym_list,
-						al->sym->name))) {
+						al->sym->name))) { /* 0 */
 		al->filtered |= (1 << HIST_FILTER__SYMBOL);
 	}
 
