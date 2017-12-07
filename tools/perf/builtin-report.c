@@ -109,8 +109,12 @@ static int hist_iter__report_callback(struct hist_entry_iter *iter,
 	struct branch_info *bi;
 
 	report__inc_stats(rep, he);
+	/*
+	 * struct hist_entry he is either new or existing,
+	 * if he is new(he->stat.events = 1), rep->nr_entries++
+	 */
 
-	if (!ui__has_annotation())
+	if (!ui__has_annotation()) /* ui__has_annotation() = 0 */
 		return 0;
 
 	if (sort__mode == SORT_MODE__BRANCH) {
@@ -157,8 +161,9 @@ static int process_sample_event(struct perf_tool *tool,
 
 	if (perf_event__preprocess_sample(event, machine, &al, sample) < 0) { /* 0 < 0 */
 	/* 
-	 * assign struct addr_location al
-	 * only guest kernel sample's al->sym can be found, other samples al->sym = NULL
+	 * assign struct addr_location al.
+	 * find sample->ip's matching map and sym,
+	 * the first type = 9, misc = 1 sample, load host kernel symbols(dso__load) 
 	 */
 		pr_debug("problem processing %d event, skipping it.\n",
 			 event->header.type);

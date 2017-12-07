@@ -810,7 +810,6 @@ try_again:
 		 * Kernel maps might be changed when loading symbols so loading
 		 * must be done prior to using kernel maps.
 		 */
-		printf("al map dso name = %s\n", al->map->dso->long_name);
 		if (load_map) /* cpumode == PERF_RECORD_MISC_KERNEL || PERF_RECORD_MISC_GUEST_KERNEL*/
 			map__load(al->map, machine->symbol_filter); /* dso__load again */
 		al->addr = al->map->map_ip(al->map, al->addr); /* map_ip return al->addr, do noting*/
@@ -857,6 +856,7 @@ int perf_event__preprocess_sample(const union perf_event *event,
 	/*
 	 * assign struct addr_location al
 	 * can only find guest kernel sample(type = 9, misc = 4), after find, do noting....!!!
+	 * the first type = 9, misc = 1 sample, load host kernel symbols(dso__load)
 	 */
 	dump_printf(" ...... dso: %s\n",
 		    al->map ? al->map->dso->long_name :
@@ -868,7 +868,11 @@ int perf_event__preprocess_sample(const union perf_event *event,
 	al->sym = NULL;
 	al->cpu = sample->cpu;
 
-	if (al->map) { /* guest kernel sample(type = 9, misc = 4) */
+	if (al->map) { /* if sample type = 9, misc = 5, al->map = NULL */
+	/* 
+	 * sample->ip match thread->mg->maps[type](rb_tree)'s map,
+	 * map->start <= sample->ip <= map->end
+	 */
 		struct dso *dso = al->map->dso;
 
 		if (symbol_conf.dso_list &&

@@ -380,8 +380,8 @@ static struct hist_entry *add_hist_entry(struct hists *hists,
 	struct rb_node *parent = NULL;
 	struct hist_entry *he;
 	int64_t cmp;
-	u64 period = entry->stat.period;
-	u64 weight = entry->stat.weight;
+	u64 period = entry->stat.period; /* sample->period */
+	u64 weight = entry->stat.weight; /* sample->weight */
 
 	p = &hists->entries_in->rb_node;
 
@@ -469,6 +469,8 @@ struct hist_entry *__hists__add_entry(struct hists *hists,
 		},
 		.parent = sym_parent,
 		.filtered = symbol__parent_filter(sym_parent) | al->filtered,
+		/* misc = 4 or 5, filtered = 0 */
+		/* misc = 1 or 2, filtered = 32 */
 		.hists	= hists,
 		.branch_info = bi,
 		.mem_info = mi,
@@ -664,15 +666,32 @@ iter_add_single_normal_entry(struct hist_entry_iter *iter, struct addr_location 
 {
 	struct perf_evsel *evsel = iter->evsel;
 	struct perf_sample *sample = iter->sample;
-	struct hist_entry *he;
+	struct hist_entry *he; /* histogram entry */
 
 	he = __hists__add_entry(evsel__hists(evsel), al, iter->parent, NULL, NULL,
 				sample->period, sample->weight,
-				sample->transaction, true);
+				sample->transaction, true); /* iter->parent = NULL */
+	/*
+	 * evsel__hists(evsel):
+	 *	struct hists_evsel {
+	 *		struct perf_evsel evsel;
+	 *		struct hists hists;
+	 *	}
+	 * return: evsel's hists(struct hists)
+	 *
+	 * __hists__add_entry():
+	 *	1. new struct hist_entry entry
+	 *	2. update entry->stat(period, weight, and so on)
+	 *	3. find/new entry to hists->entries_in
+	 */
 	if (he == NULL)
 		return -ENOMEM;
 
-	iter->he = he;
+	iter->he = he; 
+	/*
+	 *  a struct hist_entry correspond to a thread's map's symbol 
+	 *  because struct hist_entry has a struct map_symbol
+	 */
 	return 0;
 }
 
@@ -690,8 +709,15 @@ iter_finish_normal_entry(struct hist_entry_iter *iter,
 	iter->he = NULL;
 
 	hists__inc_nr_samples(evsel__hists(evsel), he->filtered);
+	/*
+	 * evsel's hists->stats->nr_events[0] ++;
+	 * evsel's hists->stats->nr_events[9(PERF_RECORD_SAMPLE)] ++;
+	 * host he->filtered = 32, guest he->filtered = 0
+	 * if(!he->filtered)
+	 * 	hists->stats->nr_non_filtered-samples++;
+	 */
 
-	return hist_entry__append_callchain(he, sample);
+	return hist_entry__append_callchain(he, sample); /* do nothing, return 0 */
 }
 
 static int
@@ -865,6 +891,7 @@ int hist_entry_iter__add(struct hist_entry_iter *iter, struct addr_location *al,
 
 	err = sample__resolve_callchain(sample, &iter->parent, evsel, al,
 					max_stack_depth);
+	/* sample->callchain == NULL, return 0, do nothing */
 	if (err)
 		return err;
 
@@ -872,20 +899,31 @@ int hist_entry_iter__add(struct hist_entry_iter *iter, struct addr_location *al,
 	iter->sample = sample;
 
 	err = iter->ops->prepare_entry(iter, al);
+	/* function iter_prepare_normal_entry() { return 0; } in util/hists.c*/
 	if (err)
 		goto out;
 
 	err = iter->ops->add_single_entry(iter, al);
+	/*
+	 * function iter_add_single_normal_entry() in util/hists.c
+	 * add/update a struct hist_entry to evsel's hists->entries_in
+	 */
 	if (err)
 		goto out;
 
 	if (iter->he && iter->add_entry_cb) {
+		/* function hist_iter_report_callback in builtin-report.c */
 		err = iter->add_entry_cb(iter, al, true, arg);
+		/*
+		 * function hist_iter_report_callback() do nothing
+		 * ui_has__annotation() = 0, then return 0
+		 */
 		if (err)
 			goto out;
 	}
 
-	while (iter->ops->next_entry(iter, al)) {
+	while (iter->ops->next_entry(iter, al)) {/* 0 */ 
+	/* function iter_next_nop_entry() { return 0; } in util/hist.c  */
 		err = iter->ops->add_next_entry(iter, al);
 		if (err)
 			break;
@@ -899,6 +937,9 @@ int hist_entry_iter__add(struct hist_entry_iter *iter, struct addr_location *al,
 
 out:
 	err2 = iter->ops->finish_entry(iter, al);
+	/*
+	 * function iter_finish_normal_entry() in hist.c
+	 */
 	if (!err)
 		err = err2;
 

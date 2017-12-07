@@ -1321,36 +1321,36 @@ static bool dso__is_compatible_symtab_type(struct dso *dso, bool kmod,
 					   enum dso_binary_type type)
 {
 	switch (type) {
-	case DSO_BINARY_TYPE__JAVA_JIT:
-	case DSO_BINARY_TYPE__DEBUGLINK:
-	case DSO_BINARY_TYPE__SYSTEM_PATH_DSO:
-	case DSO_BINARY_TYPE__FEDORA_DEBUGINFO:
-	case DSO_BINARY_TYPE__UBUNTU_DEBUGINFO:
-	case DSO_BINARY_TYPE__BUILDID_DEBUGINFO:
-	case DSO_BINARY_TYPE__OPENEMBEDDED_DEBUGINFO:
+	case DSO_BINARY_TYPE__JAVA_JIT:/*4*/
+	case DSO_BINARY_TYPE__DEBUGLINK:/*5*/
+	case DSO_BINARY_TYPE__SYSTEM_PATH_DSO:/*10*/
+	case DSO_BINARY_TYPE__FEDORA_DEBUGINFO:/*7*/
+	case DSO_BINARY_TYPE__UBUNTU_DEBUGINFO:/*8*/
+	case DSO_BINARY_TYPE__BUILDID_DEBUGINFO:/*9*/
+	case DSO_BINARY_TYPE__OPENEMBEDDED_DEBUGINFO:/*17*/
 		return !kmod && dso->kernel == DSO_TYPE_USER;
 
-	case DSO_BINARY_TYPE__KALLSYMS:
-	case DSO_BINARY_TYPE__VMLINUX:
-	case DSO_BINARY_TYPE__KCORE:
+	case DSO_BINARY_TYPE__KALLSYMS:/*0*/
+	case DSO_BINARY_TYPE__VMLINUX:/*2*/
+	case DSO_BINARY_TYPE__KCORE:/*15*/
 		return dso->kernel == DSO_TYPE_KERNEL;
 
-	case DSO_BINARY_TYPE__GUEST_KALLSYMS:
-	case DSO_BINARY_TYPE__GUEST_VMLINUX:
-	case DSO_BINARY_TYPE__GUEST_KCORE:
+	case DSO_BINARY_TYPE__GUEST_KALLSYMS:/*1*/
+	case DSO_BINARY_TYPE__GUEST_VMLINUX:/*3*/
+	case DSO_BINARY_TYPE__GUEST_KCORE:/*16*/
 		return dso->kernel == DSO_TYPE_GUEST_KERNEL;
 
-	case DSO_BINARY_TYPE__GUEST_KMODULE:
-	case DSO_BINARY_TYPE__GUEST_KMODULE_COMP:
-	case DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE:
-	case DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE_COMP:
+	case DSO_BINARY_TYPE__GUEST_KMODULE:/*11*/
+	case DSO_BINARY_TYPE__GUEST_KMODULE_COMP:/*12*/
+	case DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE:/*13*/
+	case DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE_COMP:/*14*/
 		/*
 		 * kernel modules know their symtab type - it's set when
 		 * creating a module dso in machine__new_module().
 		 */
 		return kmod && dso->symtab_type == type;
 
-	case DSO_BINARY_TYPE__BUILD_ID_CACHE:
+	case DSO_BINARY_TYPE__BUILD_ID_CACHE:/*6*/
 		return true;
 
 	case DSO_BINARY_TYPE__NOT_FOUND:
@@ -1361,6 +1361,11 @@ static bool dso__is_compatible_symtab_type(struct dso *dso, bool kmod,
 
 int dso__load(struct dso *dso, struct map *map, symbol_filter_t filter)
 {
+	/*
+	 * at the first type = 9, misc = 1 sample, load host kernel sym
+	 * at type = 1, misc = 4, mmap filename = "[guest_kernel_kallsyms]_text", load guest kernel sym
+	 * others, load symbols by function dso__load_sym() from eg. /root/.debug/.build-id/92/c989ecdf0e9567fd11f2a2ecc3e4b0f44bfd1f
+	 */
 	char *name;
 	int ret = -1;
 	u_int i;
@@ -1410,17 +1415,18 @@ int dso__load(struct dso *dso, struct map *map, symbol_filter_t filter)
 	if (!name)
 		return -1;
 
-	kmod = dso->symtab_type == DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE ||
-		dso->symtab_type == DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE_COMP ||
-		dso->symtab_type == DSO_BINARY_TYPE__GUEST_KMODULE ||
-		dso->symtab_type == DSO_BINARY_TYPE__GUEST_KMODULE_COMP;
+	kmod = dso->symtab_type == DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE || /* 13 */
+		dso->symtab_type == DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE_COMP || /* 14 */ 
+		dso->symtab_type == DSO_BINARY_TYPE__GUEST_KMODULE || /* 11 */
+		dso->symtab_type == DSO_BINARY_TYPE__GUEST_KMODULE_COMP; /* 12 */
+	/* kmod = 0 */
 
 	/*
 	 * Iterate over candidate debug images.
 	 * Keep track of "interesting" ones (those which have a symtab, dynsym,
 	 * and/or opd section) for processing.
 	 */
-	for (i = 0; i < DSO_BINARY_TYPE__SYMTAB_CNT; i++) {
+	for (i = 0; i < DSO_BINARY_TYPE__SYMTAB_CNT; i++) { /*DSO_BINARY_TYPE__SYMTAB_CNT = 15 */
 		struct symsrc *ss = &ss_[ss_pos];
 		bool next_slot = false;
 
@@ -1431,6 +1437,13 @@ int dso__load(struct dso *dso, struct map *map, symbol_filter_t filter)
 
 		if (dso__read_binary_type_filename(dso, symtab_type,
 						   root_dir, name, PATH_MAX))
+		/*
+		 * find dso->name's corresponding build-id path,
+		 * translate dso->build_id(u8 array) to absolute path,
+		 * eg. 
+		 * 	dso->name = "/home/hougq/c_demo/project/t1"
+		 *	name(build-id path) = "/root/.debug/.build-id/92/c989ecdf0e9567fd11f2a2ecc3e4b0f44bfd1f"
+		 */
 			continue;
 
 		/* Name is now the name of the next image to try */

@@ -753,7 +753,7 @@ int sample__resolve_callchain(struct perf_sample *sample, struct symbol **parent
 			      struct perf_evsel *evsel, struct addr_location *al,
 			      int max_stack)
 {
-	if (sample->callchain == NULL)
+	if (sample->callchain == NULL) /* 1 */
 		return 0;
 
 	if (symbol_conf.use_callchain || symbol_conf.cumulate_callchain ||
@@ -766,7 +766,7 @@ int sample__resolve_callchain(struct perf_sample *sample, struct symbol **parent
 
 int hist_entry__append_callchain(struct hist_entry *he, struct perf_sample *sample)
 {
-	if (!symbol_conf.use_callchain || sample->callchain == NULL)
+	if (!symbol_conf.use_callchain || sample->callchain == NULL) /* symbol_conf.use_callchain = 0 */
 		return 0;
 	return callchain_append(he->callchain, &callchain_cursor, sample->period);
 }

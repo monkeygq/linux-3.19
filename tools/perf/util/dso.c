@@ -51,6 +51,7 @@ int dso__read_binary_type_filename(const struct dso *dso,
 			debuglink--;
 		if (*debuglink == '/')
 			debuglink++;
+		/* debuglink = filename.split('/').last */
 		ret = filename__read_debuglink(dso->long_name, debuglink,
 					       size - (debuglink - filename));
 		}
