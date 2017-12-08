@@ -1236,6 +1236,8 @@ static int __event_process_build_id(struct build_id_event *bev,
 	struct dso *dso;
 	enum dso_kernel_type dso_type;
 
+	printf("__event_process_build_id\n");
+	printf("bev->pid = %d, misc = %d, filename = %s\n", bev->pid, bev->header.misc, filename);
 	machine = perf_session__findnew_machine(session, bev->pid);
 	if (!machine)
 		goto out;
@@ -1335,6 +1337,13 @@ static int perf_header__read_build_ids(struct perf_header *header,
 	u64 limit = offset + size, orig_offset = offset;
 	int err = -1;
 
+	printf("perf_header__read_build_ids\n");
+	printf("header->feat_offset = %lu\n", header->feat_offset);
+	printf("header->data_offset = %lu\n", header->data_offset);
+	printf("header->data_size = %lu\n", header->data_size);
+	printf("feat size = %lu\n", 14 * sizeof(struct perf_file_section));
+	printf("build id data offset = %lu\n", offset);
+	printf("build id data size = %lu\n", size);
 	while (offset < limit) {
 		ssize_t len;
 
@@ -1360,7 +1369,7 @@ static int perf_header__read_build_ids(struct perf_header *header,
 		 * '[kernel.kallsyms]' string for the kernel build-id has the
 		 * first 4 characters chopped off (where the pid_t sits).
 		 */
-		if (memcmp(filename, "nel.kallsyms]", 13) == 0) {
+		if (memcmp(filename, "nel.kallsyms]", 13) == 0) { /* 0 */
 			if (lseek(input, orig_offset, SEEK_SET) == (off_t)-1)
 				return -1;
 			return perf_header__read_build_ids_abi_quirk(header, input, offset, size);
@@ -1387,6 +1396,7 @@ static int process_build_id(struct perf_file_section *section,
 			    struct perf_header *ph, int fd,
 			    void *data __maybe_unused)
 {
+	printf("process_build_id\n");
 	if (perf_header__read_build_ids(ph, fd, section->offset, section->size))
 		pr_debug("Failed to read buildids, continuing...\n");
 	return 0;
@@ -2109,6 +2119,7 @@ int perf_header__process_sections(struct perf_header *header, int fd,
 	int err;
 
 	nr_sections = bitmap_weight(header->adds_features, HEADER_FEAT_BITS); /* nr of 1 in bitmap */
+	printf("nr sections = %d\n", nr_sections);
 	if (!nr_sections)
 		return 0;
 
@@ -2120,12 +2131,12 @@ int perf_header__process_sections(struct perf_header *header, int fd,
 
 	lseek(fd, header->feat_offset, SEEK_SET);
 
-	err = perf_header__getbuffer64(header, fd, feat_sec, sec_size);
+	err = perf_header__getbuffer64(header, fd, feat_sec, sec_size); /* read(fd, feat_sec, sec_size) */
 	if (err < 0)
 		goto out_free;
 
 	for_each_set_bit(feat, header->adds_features, HEADER_LAST_FEATURE) {
-		err = process(sec++, header, feat, fd, data);
+		err = process(sec++, header, feat, fd, data); /* data = &session->tevent */
 		if (err < 0)
 			goto out_free;
 	}
@@ -2342,7 +2353,8 @@ static int perf_file_section__process(struct perf_file_section *section,
 	if (!feat_ops[feat].process) /* header.c L1858 static const struct feature_ops feat_ops[]*/
 		return 0;
 
-	return feat_ops[feat].process(section, ph, fd, data);
+	printf("feat = %d\n", feat);
+	return feat_ops[feat].process(section, ph, fd, data); 
 }
 
 static int perf_file_header__read_pipe(struct perf_pipe_file_header *header,
