@@ -15,6 +15,7 @@
 #include "cpumap.h"
 #include "perf_regs.h"
 #include "asm/bug.h"
+#include "exec_cmd.h"
 
 static int perf_session__open(struct perf_session *session)
 {
@@ -752,6 +753,7 @@ static struct machine *
 {
 	const u8 cpumode = event->header.misc & PERF_RECORD_MISC_CPUMODE_MASK;
 	struct machine *machine;
+	char *path = NULL;
 
 	if (perf_guest &&
 	    ((cpumode == PERF_RECORD_MISC_GUEST_KERNEL) ||
@@ -765,12 +767,21 @@ static struct machine *
 			pid = sample->pid;
 
 		machine = perf_session__find_machine(session, pid);
-		if (!machine)
+		if(machine)
+			printf("machine->pid = %d\n", machine->pid);
+		else
+			printf("machine->pid = NULL\n");
+		if (!machine || (pid != (unsigned)machine->pid)) {
 			machine = perf_session__findnew_machine(session,
-						DEFAULT_GUEST_KERNEL_ID);
+						pid);
+			printf("newmachine->pid = %d\n", machine->pid);
+			path = find_guest_machine_kallsyms_path(machine->pid);
+			printf("path = %s\n", path);
+		}
 		return machine;
 	}
 
+	printf("machine->pid = %d\n", session->machines.host.pid);
 	return &session->machines.host;
 }
 
@@ -873,6 +884,7 @@ int perf_session__deliver_event(struct perf_session *session,
 		return perf_session__deliver_sample(session, tool, event,
 						    sample, evsel, machine);
 	case PERF_RECORD_MMAP: /* 1 */ /* event->header.misc = 1 or 4 KERNEL */
+		printf("mmap: start = %lx, len = %lx, filename = %s\n", event->mmap.start,event->mmap.len, event->mmap.filename);
 		return tool->mmap(tool, event, sample, machine);
 	case PERF_RECORD_MMAP2: /* 10 */ /* event->header.misc = 2 USER */
 		return tool->mmap2(tool, event, sample, machine);

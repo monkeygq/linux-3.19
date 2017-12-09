@@ -1239,6 +1239,7 @@ static int __event_process_build_id(struct build_id_event *bev,
 	printf("__event_process_build_id\n");
 	printf("bev->pid = %d, misc = %d, filename = %s\n", bev->pid, bev->header.misc, filename);
 	machine = perf_session__findnew_machine(session, bev->pid);
+	printf("machine->pid = %d\n", machine->pid);
 	if (!machine)
 		goto out;
 

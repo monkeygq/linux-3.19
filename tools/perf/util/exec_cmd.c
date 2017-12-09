@@ -2,9 +2,15 @@
 #include "exec_cmd.h"
 #include "quote.h"
 
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define MAX_ARGS	32
+#define MAX_BUFF_SIZE 1024
+#define MAX_CMD_SIZE 50
 
 static const char *argv_exec_path;
 static const char *argv0_path;
@@ -146,3 +152,68 @@ int execl_perf_cmd(const char *cmd,...)
 	argv[argc] = NULL;
 	return execv_perf_cmd(argv);
 }
+
+int is_file_exist(const char *path) {
+	if(!path)
+		return 0;
+	if(access(path, F_OK) == 0)
+		return 1;
+	return 0;
+}
+
+char* find_guest_machine_kallsyms_path(int pid) {
+	FILE *fstream = NULL;
+	char buff[MAX_BUFF_SIZE], *str_pid, *path = NULL, *path_end = NULL;
+	str_pid = calloc(MAX_CMD_SIZE, sizeof(char));
+	if (!str_pid)
+		return path;
+	sprintf(str_pid, "ps aux | grep \"libvirt+  %d\"", pid);
+	memset(buff, 0, MAX_BUFF_SIZE);
+	fstream = popen(str_pid, "r");
+	if(!fstream)
+		return path;
+	while(fgets(buff, MAX_BUFF_SIZE, fstream)) {
+		if ((path = strstr(buff, "file=")) && (path_end = strstr(path, ","))) {
+			path+=5;
+			*path_end = '\0';
+			path_end = strrchr(path, '/');
+			*(++path_end) = '\0';
+			strcat(path, "kallsyms");
+			if(!is_file_exist(path)) {
+				path = NULL;
+				continue;
+			}
+			break;
+		}
+	}
+	pclose(fstream);
+	free(str_pid);
+	return path;
+}
+
+int get_guest_machine_kallsyms(void) {
+/*
+	int err;
+	if(!is_file_exist("/dev/nbd0")) {
+		err = system("modprobe nbd max_part=8");
+		if(!err) {
+			printf("cmd failed: modprobe nbd max_part=8\n");
+			return err;
+		}
+	}
+*/
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

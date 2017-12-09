@@ -9,4 +9,16 @@ extern int execv_perf_cmd(const char **argv); /* NULL terminated */
 extern int execl_perf_cmd(const char *cmd, ...);
 extern const char *system_path(const char *path);
 
+enum guest_machine_kallsyms_type {
+	GUEST_KALLSYMS_UNKNOW = 0,
+	GUEST_KALLSYMS_UBUNTU,
+	GUEST_KALLSYMS_CENTOS,
+	GUEST_KALLSYMS_DEBIAN
+};
+
+
+char* find_guest_machine_kallsyms_path(int pid);
+int is_file_exist(const char *path);
+int get_guest_machine_kallsyms(void);
+
 #endif /* __PERF_EXEC_CMD_H */
