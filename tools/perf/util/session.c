@@ -776,7 +776,10 @@ static struct machine *
 						pid);
 			printf("newmachine->pid = %d\n", machine->pid);
 			path = find_guest_machine_kallsyms_path(machine->pid);
-			printf("path = %s\n", path);
+			if(path)
+				machine->root_dir = strdup(path);
+			printf("machine->root_dir = %s\n", machine->root_dir);
+			printf("test = %d\n", guest_machine_modules_parse(machine));
 		}
 		return machine;
 	}
@@ -884,7 +887,7 @@ int perf_session__deliver_event(struct perf_session *session,
 		return perf_session__deliver_sample(session, tool, event,
 						    sample, evsel, machine);
 	case PERF_RECORD_MMAP: /* 1 */ /* event->header.misc = 1 or 4 KERNEL */
-		printf("mmap: start = %lx, len = %lx, filename = %s\n", event->mmap.start,event->mmap.len, event->mmap.filename);
+		printf("mmap: start = %lx, len = %lx, end = %lx, filename = %s\n", event->mmap.start,event->mmap.len, event->mmap.start + event->mmap.len, event->mmap.filename);
 		return tool->mmap(tool, event, sample, machine);
 	case PERF_RECORD_MMAP2: /* 10 */ /* event->header.misc = 2 USER */
 		return tool->mmap2(tool, event, sample, machine);

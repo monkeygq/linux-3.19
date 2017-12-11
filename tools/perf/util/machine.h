@@ -19,6 +19,11 @@ union perf_event;
 #define	HOST_KERNEL_ID			(-1)
 #define	DEFAULT_GUEST_KERNEL_ID		(0)
 
+struct link_perf_event {
+	union perf_event event;
+	struct link_perf_event *next;
+};
+
 extern const char *ref_reloc_sym_names[];
 
 struct vdso_info;
@@ -224,4 +229,5 @@ pid_t machine__get_current_tid(struct machine *machine, int cpu);
 int machine__set_current_tid(struct machine *machine, int cpu, pid_t pid,
 			     pid_t tid);
 
+int guest_machine_modules_parse(struct machine *machine);
 #endif /* __PERF_MACHINE_H */

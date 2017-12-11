@@ -177,12 +177,19 @@ char* find_guest_machine_kallsyms_path(int pid) {
 			path+=5;
 			*path_end = '\0';
 			path_end = strrchr(path, '/');
-			*(++path_end) = '\0';
-			strcat(path, "kallsyms");
+			*path_end= '\0';
+			strcat(path, "/proc/kallsyms");
 			if(!is_file_exist(path)) {
 				path = NULL;
 				continue;
 			}
+			*path_end= '\0';
+			strcat(path, "/proc/modules");
+			if(!is_file_exist(path)) {
+				path = NULL;
+				continue;
+			}
+			*path_end= '\0';
 			break;
 		}
 	}

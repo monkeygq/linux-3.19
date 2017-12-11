@@ -13,6 +13,8 @@
 #include <symbol/kallsyms.h>
 #include "unwind.h"
 #include "linux/hash.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 static void dsos__init(struct dsos *dsos)
 {
@@ -1785,5 +1787,96 @@ int machine__get_kernel_start(struct machine *machine)
 		if (map->start)
 			machine->kernel_start = map->start;
 	}
+	return err;
+}
+
+int guest_machine_modules_parse(struct machine *machine) {
+	int err = 0;
+	char filename[1024], *line = NULL, *str_hex = NULL;
+	char dso_name[1024], *p_dso_name, *p_line;
+	char kmmap_prefix[PATH_MAX];
+	struct dso *kernel;
+	size_t n;
+	FILE *file = NULL;
+	struct link_perf_event *pe, *p_pe, *pp_pe, *head = NULL;
+	union perf_event kernel_pe;
+	if(!strlen(machine->root_dir))
+		return err;
+	strcpy(filename, machine->root_dir);
+	strcat(filename, "/proc/modules");
+	file = fopen(filename, "r");
+	if(!file)
+		return err;
+	while(!feof(file)) {
+		u64 map_start;
+		int line_len;
+		//char map_type;
+		//char *map_name;
+		line_len = getline(&line, &n, file);
+		p_dso_name = dso_name;
+		p_line = line;
+		if(line_len < 0 || !line)
+			break;
+		while(*p_line != ' ')
+			*p_dso_name++ = *p_line++;
+		*p_dso_name = '\0';
+		line[--line_len] = '\0';
+		str_hex = strrchr(line, 'x');
+		str_hex++;
+		hex2u64(str_hex, &map_start);
+		pe = malloc(sizeof(struct link_perf_event));
+		strcpy(pe->event.mmap.filename, dso_name);
+		pe->event.mmap.start = map_start;
+		if(!head) /* sort modules by map_start */
+			head = pe;
+		else {
+			p_pe = head;
+			while(p_pe && p_pe->event.mmap.start <= pe->event.mmap.start) {
+				pp_pe = p_pe;
+				p_pe = p_pe->next;
+			}
+			if(p_pe == head) {
+				pe->next = head;
+				head = pe;
+			}
+			else if(p_pe == NULL){
+				pp_pe->next = pe;
+			}
+			else {
+				pe->next = pp_pe->next;
+				pp_pe->next = pe;
+			}
+		}
+	}
+	pe = head;
+	while(pe) {
+		struct map *map;
+		char short_dso_name[1024], *name;
+		if(pe->next)
+			pe->event.mmap.len = pe->next->event.mmap.start - pe->event.mmap.start;
+		else
+			pe->event.mmap.len = (u64) - 1 - pe->event.mmap.start;
+		map = machine__new_module(machine, pe->event.mmap.start, pe->event.mmap.filename);
+		sprintf(short_dso_name, "[%s.%d]", pe->event.mmap.filename, machine->pid);
+		name = strdup(short_dso_name);
+		dso__set_short_name(map->dso, name, true);
+		map->dso->long_name = name;
+		map->end = map->start + pe->event.mmap.len;
+		pe = pe->next;
+	}
+	machine__mmap_name(machine, kmmap_prefix, sizeof(kmmap_prefix));
+	kernel = __dsos__findnew(&machine->kernel_dsos, kmmap_prefix);
+	kernel->kernel = DSO_TYPE_GUEST_KERNEL;
+	printf("kernel->kernel = %d\n", kernel->kernel);
+	__machine__create_kernel_maps(machine, kernel);
+	printf("kernel->long_name = %s\n", kernel->long_name);
+	kernel_pe.mmap.start = 0xffffffff81000000;
+	kernel_pe.mmap.pgoff = 0xffffffff81000000;
+	kernel_pe.mmap.len = 0x1f000000;
+	strcpy(kernel_pe.mmap.filename, kernel->long_name);
+	maps__set_kallsyms_ref_reloc_sym(machine->vmlinux_maps, "_text", kernel_pe.mmap.pgoff);
+	dso__load(kernel, machine->vmlinux_maps[MAP__FUNCTION], NULL);
+	free(line);
+	fclose(file);
 	return err;
 }
