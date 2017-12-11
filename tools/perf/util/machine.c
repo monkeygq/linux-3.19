@@ -1800,6 +1800,9 @@ int guest_machine_modules_parse(struct machine *machine) {
 	FILE *file = NULL;
 	struct link_perf_event *pe, *p_pe, *pp_pe, *head = NULL;
 	union perf_event kernel_pe;
+	u64 min_map_end = (u64) - 1;
+	char map_start_symbol[1024];
+	*map_start_symbol = '\0';
 	if(!strlen(machine->root_dir))
 		return err;
 	strcpy(filename, machine->root_dir);
@@ -1867,14 +1870,41 @@ int guest_machine_modules_parse(struct machine *machine) {
 	machine__mmap_name(machine, kmmap_prefix, sizeof(kmmap_prefix));
 	kernel = __dsos__findnew(&machine->kernel_dsos, kmmap_prefix);
 	kernel->kernel = DSO_TYPE_GUEST_KERNEL;
-	printf("kernel->kernel = %d\n", kernel->kernel);
 	__machine__create_kernel_maps(machine, kernel);
-	printf("kernel->long_name = %s\n", kernel->long_name);
-	kernel_pe.mmap.start = 0xffffffff81000000;
-	kernel_pe.mmap.pgoff = 0xffffffff81000000;
-	kernel_pe.mmap.len = 0x1f000000;
+	kernel_pe.mmap.start = machine__get_running_kernel_start(machine, NULL);
+	kernel_pe.mmap.pgoff = kernel_pe.mmap.start;
+	fclose(file);
+	strcpy(filename, machine->root_dir);
+	strcat(filename, "/proc/kallsyms");
+	file = fopen(filename, "r");
+	if(!file)
+		return err;
+	while(!feof(file)) {
+		u64 map_end;
+		int line_len;
+		char *flag;
+		line_len = getline(&line, &n, file);
+		if(line_len < 0 || !line)
+			break;
+		if(!strlen(map_start_symbol)) {
+			if(strstr(line, "_text"))
+				strcpy(map_start_symbol, "_text");
+			else if(strstr(line, "_stext"))
+				strcpy(map_start_symbol, "_stext");
+		}
+		printf("map start symbol = %s\n", map_start_symbol);
+		flag = strrchr(line, '[');
+		if(!flag)
+			continue;
+		hex2u64(line, &map_end);
+		if(map_end < min_map_end)
+			min_map_end = map_end;
+	}
+	kernel_pe.mmap.len = min_map_end - kernel_pe.mmap.start;
+	printf("min map end = %lx\n", min_map_end);
 	strcpy(kernel_pe.mmap.filename, kernel->long_name);
-	maps__set_kallsyms_ref_reloc_sym(machine->vmlinux_maps, "_text", kernel_pe.mmap.pgoff);
+	machine__set_kernel_mmap_len(machine, &kernel_pe);
+	maps__set_kallsyms_ref_reloc_sym(machine->vmlinux_maps, map_start_symbol, kernel_pe.mmap.pgoff);
 	dso__load(kernel, machine->vmlinux_maps[MAP__FUNCTION], NULL);
 	free(line);
 	fclose(file);
