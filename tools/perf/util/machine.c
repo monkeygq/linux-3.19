@@ -1790,45 +1790,30 @@ int machine__get_kernel_start(struct machine *machine)
 	return err;
 }
 
-int guest_machine_modules_parse(struct machine *machine) {
-	int err = 0;
-	char filename[1024], *line = NULL, *str_hex = NULL;
-	char dso_name[1024], *p_dso_name, *p_line;
-	char kmmap_prefix[PATH_MAX];
-	struct dso *kernel;
+struct link_perf_event* guest_machine_modules_parse(char *filename, struct machine *machine) {
+	char *line = NULL, *str_hex = NULL, *p_line;
+	u64 map_start;
+	int line_len;
 	size_t n;
-	FILE *file = NULL;
-	struct link_perf_event *pe, *p_pe, *pp_pe, *head = NULL;
-	union perf_event kernel_pe;
-	u64 min_map_end = (u64) - 1;
-	char map_start_symbol[1024];
-	*map_start_symbol = '\0';
-	if(!strlen(machine->root_dir))
-		return err;
-	strcpy(filename, machine->root_dir);
-	strcat(filename, "/proc/modules");
+	struct link_perf_event *head = NULL, *pe, *p_pe, *pp_pe;
+	FILE *file;
 	file = fopen(filename, "r");
 	if(!file)
-		return err;
+		return NULL;
 	while(!feof(file)) {
-		u64 map_start;
-		int line_len;
-		//char map_type;
-		//char *map_name;
 		line_len = getline(&line, &n, file);
-		p_dso_name = dso_name;
-		p_line = line;
 		if(line_len < 0 || !line)
 			break;
-		while(*p_line != ' ')
-			*p_dso_name++ = *p_line++;
-		*p_dso_name = '\0';
 		line[--line_len] = '\0';
+		p_line = line;
 		str_hex = strrchr(line, 'x');
 		str_hex++;
+		while(*p_line != ' ')
+			p_line++;
+		*p_line = '\0';
 		hex2u64(str_hex, &map_start);
 		pe = malloc(sizeof(struct link_perf_event));
-		strcpy(pe->event.mmap.filename, dso_name);
+		strcpy(pe->event.mmap.filename, line);
 		pe->event.mmap.start = map_start;
 		if(!head) /* sort modules by map_start */
 			head = pe;
@@ -1851,6 +1836,7 @@ int guest_machine_modules_parse(struct machine *machine) {
 			}
 		}
 	}
+
 	pe = head;
 	while(pe) {
 		struct map *map;
@@ -1867,22 +1853,22 @@ int guest_machine_modules_parse(struct machine *machine) {
 		map->end = map->start + pe->event.mmap.len;
 		pe = pe->next;
 	}
-	machine__mmap_name(machine, kmmap_prefix, sizeof(kmmap_prefix));
-	kernel = __dsos__findnew(&machine->kernel_dsos, kmmap_prefix);
-	kernel->kernel = DSO_TYPE_GUEST_KERNEL;
-	__machine__create_kernel_maps(machine, kernel);
-	kernel_pe.mmap.start = machine__get_running_kernel_start(machine, NULL);
-	kernel_pe.mmap.pgoff = kernel_pe.mmap.start;
+	free(line);
 	fclose(file);
-	strcpy(filename, machine->root_dir);
-	strcat(filename, "/proc/kallsyms");
+	return head;
+}
+
+u64 guest_machine_kernel_map_end(char *filename, char *map_start_symbol) {
+	char *line = NULL, *flag;
+	int line_len;
+	size_t n;
+	u64 err = 0;
+	u64 map_end, min_map_end = (u64) - 1;
+	FILE *file;
 	file = fopen(filename, "r");
 	if(!file)
 		return err;
 	while(!feof(file)) {
-		u64 map_end;
-		int line_len;
-		char *flag;
 		line_len = getline(&line, &n, file);
 		if(line_len < 0 || !line)
 			break;
@@ -1892,7 +1878,6 @@ int guest_machine_modules_parse(struct machine *machine) {
 			else if(strstr(line, "_stext"))
 				strcpy(map_start_symbol, "_stext");
 		}
-		printf("map start symbol = %s\n", map_start_symbol);
 		flag = strrchr(line, '[');
 		if(!flag)
 			continue;
@@ -1900,13 +1885,42 @@ int guest_machine_modules_parse(struct machine *machine) {
 		if(map_end < min_map_end)
 			min_map_end = map_end;
 	}
+	free(line);
+	fclose(file);
+	return min_map_end;
+}
+
+int __guest_machine_modules_parse(struct machine *machine) {
+	int err = 0;
+	char filename[1024];
+	char kmmap_prefix[PATH_MAX];
+	struct dso *kernel;
+	union perf_event kernel_pe;
+	u64 min_map_end;
+	char map_start_symbol[1024];
+	*map_start_symbol = '\0';
+	if(!strlen(machine->root_dir))
+		return err - 1;
+
+	sprintf(filename, "%s/proc/modules", machine->root_dir);
+	if(!guest_machine_modules_parse(filename, machine)) {
+		return err - 2;
+	}
+	machine__mmap_name(machine, kmmap_prefix, sizeof(kmmap_prefix));
+	kernel = __dsos__findnew(&machine->kernel_dsos, kmmap_prefix);
+	kernel->kernel = DSO_TYPE_GUEST_KERNEL;
+	__machine__create_kernel_maps(machine, kernel);
+
+	kernel_pe.mmap.start = machine__get_running_kernel_start(machine, NULL);
+	kernel_pe.mmap.pgoff = kernel_pe.mmap.start;
+
+	sprintf(filename, "%s/proc/kallsyms", machine->root_dir);
+	min_map_end = guest_machine_kernel_map_end(filename, map_start_symbol);
 	kernel_pe.mmap.len = min_map_end - kernel_pe.mmap.start;
-	printf("min map end = %lx\n", min_map_end);
+
 	strcpy(kernel_pe.mmap.filename, kernel->long_name);
 	machine__set_kernel_mmap_len(machine, &kernel_pe);
 	maps__set_kallsyms_ref_reloc_sym(machine->vmlinux_maps, map_start_symbol, kernel_pe.mmap.pgoff);
 	dso__load(kernel, machine->vmlinux_maps[MAP__FUNCTION], NULL);
-	free(line);
-	fclose(file);
 	return err;
 }

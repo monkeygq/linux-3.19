@@ -779,7 +779,7 @@ static struct machine *
 			if(path)
 				machine->root_dir = strdup(path);
 			printf("machine->root_dir = %s\n", machine->root_dir);
-			printf("test = %d\n", guest_machine_modules_parse(machine));
+			printf("test = %d\n", __guest_machine_modules_parse(machine));
 		}
 		return machine;
 	}

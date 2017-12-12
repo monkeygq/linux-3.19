@@ -229,5 +229,7 @@ pid_t machine__get_current_tid(struct machine *machine, int cpu);
 int machine__set_current_tid(struct machine *machine, int cpu, pid_t pid,
 			     pid_t tid);
 
-int guest_machine_modules_parse(struct machine *machine);
+int __guest_machine_modules_parse(struct machine *machine);
+struct link_perf_event* guest_machine_modules_parse(char *filename, struct machine *machine);
+u64 guest_machine_kernel_map_end(char *filename, char *map_start_symbol);
 #endif /* __PERF_MACHINE_H */
