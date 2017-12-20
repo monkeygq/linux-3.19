@@ -5253,6 +5253,7 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu)
 	u32 ecx = vcpu->arch.regs[VCPU_REGS_RCX];
 	u64 data;
 
+	printk(KERN_NOTICE "I am in vmx.c, handle_rdmsr idx = %x\n", ecx);
 	if (vmx_get_msr(vcpu, ecx, &data)) {
 		trace_kvm_msr_read_ex(ecx);
 		kvm_inject_gp(vcpu, 0);
@@ -5278,6 +5279,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu)
 	msr.data = data;
 	msr.index = ecx;
 	msr.host_initiated = false;
+	printk(KERN_NOTICE "I am in vmx.c, handle_wrmsr idx = %x, data = %llx\n", msr.index, msr.data);
 	if (kvm_set_msr(vcpu, &msr) != 0) {
 		trace_kvm_msr_write_ex(ecx, data);
 		kvm_inject_gp(vcpu, 0);

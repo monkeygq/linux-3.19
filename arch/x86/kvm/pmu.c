@@ -416,10 +416,10 @@ int kvm_pmu_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 	struct kvm_pmc *pmc;
 	u32 index = msr_info->index;
 	u64 data = msr_info->data;
-	printk(KERN_NOTICE "I am in pmu.c, kvm_pmu_set_msr\n");
+	printk(KERN_NOTICE "I am in pmu.c, kvm_pmu_set_msr idx: %x, data: %llx\n", index, data);
 
 	switch (index) {
-	case MSR_CORE_PERF_FIXED_CTR_CTRL:
+	case MSR_CORE_PERF_FIXED_CTR_CTRL: /* 0x38d */
 		if (pmu->fixed_ctr_ctrl == data)
 			return 0;
 		if (!(data & 0xfffffffffffff444ull)) {
