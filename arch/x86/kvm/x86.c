@@ -893,6 +893,7 @@ bool kvm_rdpmc(struct kvm_vcpu *vcpu)
 	u32 ecx = kvm_register_read(vcpu, VCPU_REGS_RCX);
 	u64 data;
 	int err;
+	printk(KERN_NOTICE "I am in x86.c, kvm_rdpmc: ecx = %x\n", ecx);
 
 	err = kvm_pmu_read_pmc(vcpu, ecx, &data);
 	if (err)

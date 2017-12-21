@@ -5353,6 +5353,7 @@ static int handle_invlpg(struct kvm_vcpu *vcpu)
 static int handle_rdpmc(struct kvm_vcpu *vcpu)
 {
 	int err;
+	printk(KERN_NOTICE "I am in vmx.c, handle_rdpmc\n");
 
 	err = kvm_rdpmc(vcpu);
 	kvm_complete_insn_gp(vcpu, err);

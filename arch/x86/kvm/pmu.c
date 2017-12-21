@@ -485,7 +485,7 @@ int kvm_pmu_read_pmc(struct kvm_vcpu *vcpu, unsigned pmc, u64 *data)
 	bool fixed = pmc & (1u << 30);
 	struct kvm_pmc *counters;
 	u64 ctr;
-	printk(KERN_NOTICE "I am in pmu.c, kvm_pmu_read_pmc\n");
+	printk(KERN_NOTICE "I am in pmu.c, kvm_pmu_read_pmc start\n");
 
 	pmc &= ~(3u << 30);
 	if (!fixed && pmc >= pmu->nr_arch_gp_counters)
@@ -497,6 +497,7 @@ int kvm_pmu_read_pmc(struct kvm_vcpu *vcpu, unsigned pmc, u64 *data)
 	if (fast_mode)
 		ctr = (u32)ctr;
 	*data = ctr;
+	printk(KERN_NOTICE "I am in pmu.c, kvm_pmu_read_pmc end: idx=%x,data=%llx\n", pmc, *data);
 
 	return 0;
 }
